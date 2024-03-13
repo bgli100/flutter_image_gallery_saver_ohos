@@ -1,0 +1,217 @@
+import { FlutterPlugin, FlutterPluginBinding } from '@ohos/flutter_ohos/src/main/ets/embedding/engine/plugins/FlutterPlugin';
+import MethodChannel, { MethodCallHandler, MethodResult } from '@ohos/flutter_ohos/src/main/ets/plugin/common/MethodChannel';
+import MethodCall from '@ohos/flutter_ohos/src/main/ets/plugin/common/MethodCall';
+import { Permissions } from '@ohos.abilityAccessCtrl';
+import photoAccessHelper from '@ohos.file.photoAccessHelper'
+import { AbilityAware, AbilityPluginBinding } from '@ohos/flutter_ohos';
+import Log from '@ohos/flutter_ohos/src/main/ets/util/Log'
+import { reqPermissionsFromUser, checkAccessToken } from './../../utils/Permissions'
+import FileMimeTypeUtil from './../../utils/FileMimeTypeUtil'
+import { HashMap } from '@kit.ArkTS';
+import fs from "@ohos.file.fs"
+import image from '@ohos.multimedia.image'
+
+const TAG = "ImageGallerySaverPlugin"
+const permissions: Array<Permissions> = ['ohos.permission.WRITE_IMAGEVIDEO']
+/** ImageGallerySaverPlugin **/
+export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCallHandler, AbilityAware {
+  private channel: MethodChannel | null = null;
+  private applicationContext: Context | null = null;
+  private photoAccessHelper: photoAccessHelper.PhotoAccessHelper | null = null;
+  private fileMimeType: FileMimeTypeUtil = new FileMimeTypeUtil();
+
+  constructor() {}
+
+  onAttachedToAbility(binding: AbilityPluginBinding): void {
+    this.photoAccessHelper = photoAccessHelper.getPhotoAccessHelper(binding.getAbility().context);
+    // 向用户申请权限
+    reqPermissionsFromUser(binding.getAbility().context, permissions);
+  }
+
+  onDetachedFromAbility(): void {
+    throw new Error('Method not implemented.');
+  }
+
+  getUniqueClassName(): string {
+    return "ImageGallerySaverPlugin"
+  }
+
+  onAttachedToEngine(binding: FlutterPluginBinding): void {
+    this.channel = new MethodChannel(binding.getBinaryMessenger(), "image_gallery_saver");
+    this.channel.setMethodCallHandler(this);
+    this.applicationContext = binding.getApplicationContext();
+  }
+
+  onDetachedFromEngine(binding: FlutterPluginBinding): void {
+    if (this.channel != null) {
+      this.channel.setMethodCallHandler(null);
+    }
+  }
+
+  async onMethodCall(call: MethodCall, result: MethodResult) {
+    // 判断是否已经授权
+    const state = await checkAccessToken('ohos.permission.WRITE_IMAGEVIDEO');
+    if (state == -1) {
+      result.success(SaveResultModel.toHashMap(false, null, 'Permissions is false'));
+      return;
+    }
+
+    switch (call.method) {
+      case "saveImageToGallery":
+        let image: Uint8Array = call.args.imageBytes;
+        let quality: number = call.args.quality;
+        let name: string = call.args.name;
+        result.success(await this.saveImageToGallery(image, quality, name))
+        break;
+      case "saveFileToGallery":
+        let path: string = call.args.file;
+        let fileName: string = call.args.name;
+        result.success(await this.saveFileToGallery(path, fileName));
+        break;
+    }
+  }
+
+  // 保存图片
+  async saveImageToGallery(bmp: Uint8Array, quality: number, name: string):Promise<HashMap<String, ESObject>> {
+    if (bmp == null || quality == null) {
+      return SaveResultModel.toHashMap(false, null, 'parameters error');
+    }
+
+    if (this.applicationContext == null) {
+      return SaveResultModel.toHashMap(false, null, 'applicationContext is null');
+    }
+
+    const pickImageBuffer = await this.saveCacheDir(bmp, quality)
+
+    if (pickImageBuffer == null) {
+      return SaveResultModel.toHashMap(false, null, 'image pick fail');
+    }
+
+    let fileUri: string | null = await this.generateUri("jpg", name);
+    let outputFile: fs.File;
+    let success: boolean = false;
+
+    if (fileUri != null) {
+      outputFile = fs.openSync(fileUri, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
+      try {
+        await fs.write(outputFile.fd, pickImageBuffer);
+        success = true;
+      } catch (e) {
+        return SaveResultModel.toHashMap(false, null, 'write is e ' + JSON.stringify(e));
+      }
+      await fs.close(outputFile);
+    }else {
+      return SaveResultModel.toHashMap(false, null, 'fileUri is null');
+    }
+
+    if (success) {
+      return SaveResultModel.toHashMap(true, fileUri, 'success save image');
+    }
+
+    return SaveResultModel.toHashMap(false, null, 'saveImageToGallery fail');
+  }
+
+  // 保存文件
+  async saveFileToGallery(path: string, name: string): Promise<HashMap<String, ESObject>> {
+    if (path == null) {
+      return SaveResultModel.toHashMap(false, null, 'parameters error');
+    }
+
+    if (this.applicationContext == null) {
+      return SaveResultModel.toHashMap(false, null, 'applicationContext is null');
+    }
+
+    if (!fs.accessSync(path)) {
+      return SaveResultModel.toHashMap(false, null, `${path} does not exist`);
+    }
+
+    let fileUri: string | null = await this.generateUri(path.split('.')[1], name);
+    let outputFile: fs.File;
+    let success: boolean = false;
+
+    if (fileUri != null) {
+      outputFile = fs.openSync(fileUri, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
+      try {
+        await fs.copyFile(path, outputFile.fd);
+        success = true;
+      } catch (e) {
+        return SaveResultModel.toHashMap(false, null, "copy file failed with error message: " + e.message + ", error code: " + e.code);
+      }
+
+      await fs.close(outputFile)
+    } else {
+      return SaveResultModel.toHashMap(false, null, "fileUri is null");
+    }
+
+    if (success) {
+      return SaveResultModel.toHashMap(!!fileUri, fileUri, "success save file");
+    }
+
+    return SaveResultModel.toHashMap(false, null, "saveFileToGallery is fail");
+  }
+
+  // 创建相册资源，返回uri
+  async generateUri(extension: string, name: string | null) {
+    let fileName = name;
+    let uri: string | null = null;
+
+    if (fileName == null) {
+      fileName = new Date().getTime().toString();
+    }
+
+    let photoType: photoAccessHelper.PhotoType | null = this.getMIMEType(fileName + '.' + extension);
+
+    if (this.photoAccessHelper != null && photoType != null) {
+      uri = await this.photoAccessHelper.createAsset(photoType, extension, { title: fileName });
+    }
+
+    return uri;
+  }
+
+  // 获取类型
+  getMIMEType(fileName: string):  photoAccessHelper.PhotoType | null{
+    const MIMEType = this.fileMimeType.getFileMimeType(fileName);
+    if (MIMEType.isVideo()) {
+      return photoAccessHelper.PhotoType.VIDEO;
+    } else if(MIMEType.isImage()) {
+      return photoAccessHelper.PhotoType.IMAGE;
+    } else {
+      return null;
+    }
+  }
+
+  // 将图片暂存到缓存
+  async saveCacheDir(bmp: Uint8Array, quality: number): Promise<ArrayBuffer | null> {
+    let filePath: string = this.applicationContext?.cacheDir + '/image_source.jpg';
+    let outputFile = fs.openSync(filePath, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE)
+    try {
+      await fs.write(outputFile.fd, bmp.buffer);
+    } catch (e) {
+      return null
+    }
+
+    return await this.pickImage(outputFile, quality);
+  }
+
+  // 压缩图片
+  async pickImage(outputFile: fs.File, quality: number) {
+    let imageBuffer: ArrayBuffer | null = null;
+    const imagePacker: image.ImagePacker = image.createImagePacker();
+    const imageSource: image.ImageSource = image.createImageSource(outputFile.fd);
+    imageBuffer = await imagePacker.packing(imageSource, { format: "image/jpeg", quality });
+    await fs.close(outputFile);
+    return imageBuffer;
+  }
+}
+
+class SaveResultModel {
+  static toHashMap(isSuccess: boolean, filePath: string | null, message: string | null):HashMap<String, ESObject> {
+    let hashMap: HashMap<String, ESObject> = new HashMap();
+    hashMap.set("isSuccess", isSuccess);
+    hashMap.set("filePath", filePath);
+    hashMap.set("message", message);
+    isSuccess ? Log.d(TAG, message) : Log.e(TAG, message);
+
+    return hashMap
+  }
+}

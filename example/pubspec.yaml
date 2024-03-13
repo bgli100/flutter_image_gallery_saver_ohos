@@ -16,9 +16,18 @@ dependencies:
   flutter:
     sdk: flutter
 
-  permission_handler: ^10.3.0
-  fluttertoast: ^8.2.2
-  path_provider: ^2.0.15
+  permission_handler: 
+    git:
+      url: "https://gitee.com/openharmony-sig/flutter_permission_handler.git"
+      path: "permission_handler"
+  fluttertoast: 
+    git: 
+      url: "https://gitee.com/openharmony-sig/flutter_fluttertoast.git"
+      path: "./"
+  path_provider: 
+    git:
+      url: "https://gitee.com/openharmony-sig/flutter_packages.git"
+      path: "packages/path_provider/path_provider"
   dio: ^5.2.1+1
 
   image_gallery_saver:
