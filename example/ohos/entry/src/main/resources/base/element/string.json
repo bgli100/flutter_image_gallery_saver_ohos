@@ -11,6 +11,10 @@
     {
       "name": "EntryAbility_label",
       "value": "image_gallery_saver_example"
+    },
+    {
+      "name": "reason",
+      "value": "label"
     }
   ]
 }

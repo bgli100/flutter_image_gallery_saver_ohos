@@ -20,8 +20,5 @@
       "default",
       "tablet"
     ],
-    "requestPermissions": [
-      {"name": "ohos.permission.WRITE_IMAGEVIDEO"}
-    ]
   },
 }

@@ -48,7 +48,11 @@
     ],
     "requestPermissions": [
       {"name" :  "ohos.permission.INTERNET"},
-      {"name" :  "ohos.permission.WRITE_IMAGEVIDEO"}
+      {
+        "name" :  "ohos.permission.WRITE_IMAGEVIDEO",
+        "reason": "$string:reason",
+        "usedScene": {}
+      }
     ]
   }
 }
