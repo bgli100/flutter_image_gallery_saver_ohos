@@ -72,14 +72,14 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
 
     switch (call.method) {
       case "saveImageToGallery":
-        let image: Uint8Array = call.args.imageBytes;
-        let quality: number = call.args.quality;
-        let name: string = call.args.name;
+        let image: Uint8Array = call.args.get("imageBytes");
+        let quality: number = call.args.get("quality");
+        let name: string = call.args.get("name");
         result.success(await this.saveImageToGallery(image, quality, name))
         break;
       case "saveFileToGallery":
-        let path: string = call.args.file;
-        let fileName: string = call.args.name;
+        let path: string = call.args.get("file");
+        let fileName: string = call.args.get("name");
         result.success(await this.saveFileToGallery(path, fileName));
         break;
     }
