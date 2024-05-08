@@ -28,6 +28,7 @@ dependencies:
     git:
       url: "https://gitee.com/openharmony-sig/flutter_packages.git"
       path: "packages/path_provider/path_provider"
+      ref: "br_optimize_har_structure"
   dio: ^5.2.1+1
 
   image_gallery_saver:
