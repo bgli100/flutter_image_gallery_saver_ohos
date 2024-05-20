@@ -24,6 +24,7 @@ import FileMimeTypeUtil from './../../utils/FileMimeTypeUtil'
 import { HashMap } from '@kit.ArkTS';
 import fs from "@ohos.file.fs"
 import image from '@ohos.multimedia.image'
+import abilityAccessCtrl from '@ohos.abilityAccessCtrl';
 
 const TAG = "ImageGallerySaverPlugin"
 const permissions: Array<Permissions> = ['ohos.permission.WRITE_IMAGEVIDEO']
@@ -33,13 +34,14 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
   private applicationContext: Context | null = null;
   private photoAccessHelper: photoAccessHelper.PhotoAccessHelper | null = null;
   private fileMimeType: FileMimeTypeUtil = new FileMimeTypeUtil();
+  private binding: AbilityPluginBinding | null = null;
 
   constructor() {}
 
   onAttachedToAbility(binding: AbilityPluginBinding): void {
     this.photoAccessHelper = photoAccessHelper.getPhotoAccessHelper(binding.getAbility().context);
-    // 向用户申请权限
-    reqPermissionsFromUser(binding.getAbility().context, permissions);
+
+    this.binding = binding;
   }
 
   onDetachedFromAbility(): void {
@@ -65,23 +67,35 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
   async onMethodCall(call: MethodCall, result: MethodResult) {
     // 判断是否已经授权
     const state = await checkAccessToken('ohos.permission.WRITE_IMAGEVIDEO');
-    if (state == -1) {
-      result.success(SaveResultModel.toHashMap(false, null, 'Permissions is false'));
-      return;
-    }
 
+    if (state == abilityAccessCtrl.GrantStatue.PERMISSION_DENIED) {
+      reqPermissionsFromUser(this.binding!.getAbility().context, permissions, async (error, data) => {
+        let grantStatus: Array<number> = data.authResults;
+
+        if (grantStatus == abilityAccessCtrl.GrantStatue.PERMISSION_GRANTED) {
+          result.success(await this.checkMode(call));
+        } else {
+          result.success(SaveResultModel.toHashMap(false, null, 'Permissions is false'));
+        }
+      })
+    } else {
+      result.success(await this.checkMode(call));
+    }
+  }
+
+  async checkMode(call: MethodCall) {
     switch (call.method) {
       case "saveImageToGallery":
         let image: Uint8Array = call.args.get("imageBytes");
         let quality: number = call.args.get("quality");
         let name: string = call.args.get("name");
-        result.success(await this.saveImageToGallery(image, quality, name))
-        break;
+        return await this.saveImageToGallery(image, quality, name);
       case "saveFileToGallery":
         let path: string = call.args.get("file");
         let fileName: string = call.args.get("name");
-        result.success(await this.saveFileToGallery(path, fileName));
-        break;
+        return await this.saveFileToGallery(path, fileName);
+      default:
+        return SaveResultModel.toHashMap(false, null, 'Method is false')
     }
   }
 
