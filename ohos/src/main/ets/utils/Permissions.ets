@@ -15,7 +15,7 @@
 import bundleManager from '@ohos.bundle.bundleManager';
 import abilityAccessCtrl, { Permissions, PermissionRequestResult } from '@ohos.abilityAccessCtrl';
 import { common } from '@kit.AbilityKit'
-import { BusinessError } from '@kit.BasicServicesKit';
+import { AsyncCallback } from '@kit.BasicServicesKit';
 
 export function reqPermissionsFromUser(context:common.UIAbilityContext, permissions:Array<Permissions>, requestCallback: AsyncCallback<PermissionRequestResult>) {
   let atManager:abilityAccessCtrl.AtManager = abilityAccessCtrl.createAtManager();

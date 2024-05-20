@@ -68,11 +68,11 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
     // 判断是否已经授权
     const state = await checkAccessToken('ohos.permission.WRITE_IMAGEVIDEO');
 
-    if (state == abilityAccessCtrl.GrantStatue.PERMISSION_DENIED) {
+    if (state == abilityAccessCtrl.GrantStatus.PERMISSION_DENIED) {
       reqPermissionsFromUser(this.binding!.getAbility().context, permissions, async (error, data) => {
         let grantStatus: Array<number> = data.authResults;
 
-        if (grantStatus == abilityAccessCtrl.GrantStatue.PERMISSION_GRANTED) {
+        if (grantStatus[0] == abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
           result.success(await this.checkMode(call));
         } else {
           result.success(SaveResultModel.toHashMap(false, null, 'Permissions is false'));
