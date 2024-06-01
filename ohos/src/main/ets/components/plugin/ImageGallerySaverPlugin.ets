@@ -45,7 +45,7 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
   }
 
   onDetachedFromAbility(): void {
-    throw new Error('Method not implemented.');
+
   }
 
   getUniqueClassName(): string {
