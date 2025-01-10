@@ -11,15 +11,11 @@ class ImageGallerySaver {
   /// return Map type
   /// for example:{"isSuccess":true, "filePath":String?}
   static FutureOr<dynamic> saveImage(Uint8List imageBytes,
-      {int quality = 80,
-      String? name,
-      bool isReturnImagePathOfIOS = false}) async {
+      {String? name}) async {
     final result =
         await _channel.invokeMethod('saveImageToGallery', <String, dynamic>{
       'imageBytes': imageBytes,
-      'quality': quality,
-      'name': name,
-      'isReturnImagePathOfIOS': isReturnImagePathOfIOS
+      'name': name
     });
     return result;
   }
@@ -30,8 +26,7 @@ class ImageGallerySaver {
     final result = await _channel.invokeMethod(
         'saveFileToGallery', <String, dynamic>{
       'file': file,
-      'name': name,
-      'isReturnPathOfIOS': isReturnPathOfIOS
+      'name': name
     });
     return result;
   }

@@ -87,9 +87,8 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
     switch (call.method) {
       case "saveImageToGallery":
         let image: Uint8Array = call.args.get("imageBytes");
-        let quality: number = call.args.get("quality");
         let name: string = call.args.get("name");
-        return await this.saveImageToGallery(image, quality, name);
+        return await this.saveImageToGallery(image, name);
       case "saveFileToGallery":
         let path: string = call.args.get("file");
         let fileName: string = call.args.get("name");
@@ -100,8 +99,8 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
   }
 
   // 保存图片
-  async saveImageToGallery(bmp: Uint8Array, quality: number, name: string):Promise<HashMap<String, ESObject>> {
-    if (bmp == null || quality == null) {
+  async saveImageToGallery(bmp: Uint8Array, name: string):Promise<HashMap<String, ESObject>> {
+    if (bmp == null) {
       return SaveResultModel.toHashMap(false, null, 'parameters error');
     }
 
@@ -109,26 +108,20 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
       return SaveResultModel.toHashMap(false, null, 'applicationContext is null');
     }
 
-    const pickImageBuffer = await this.saveCacheDir(bmp, quality)
-
-    if (pickImageBuffer == null) {
-      return SaveResultModel.toHashMap(false, null, 'image pick fail');
-    }
-
-    let fileUri: string | null = await this.generateUri("jpg", name);
+    let fileUri: string | null = await this.generateUri(name.split('.')[1], name.split('.')[0]);
     let outputFile: fs.File;
     let success: boolean = false;
 
     if (fileUri != null) {
       outputFile = fs.openSync(fileUri, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
       try {
-        await fs.write(outputFile.fd, pickImageBuffer);
+        await fs.write(outputFile.fd, bmp.buffer);
         success = true;
       } catch (e) {
         return SaveResultModel.toHashMap(false, null, 'write is e ' + JSON.stringify(e));
       }
       await fs.close(outputFile);
-    }else {
+    } else {
       return SaveResultModel.toHashMap(false, null, 'fileUri is null');
     }
 
@@ -206,29 +199,6 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
     } else {
       return null;
     }
-  }
-
-  // 将图片暂存到缓存
-  async saveCacheDir(bmp: Uint8Array, quality: number): Promise<ArrayBuffer | null> {
-    let filePath: string = this.applicationContext?.cacheDir + '/image_source.jpg';
-    let outputFile = fs.openSync(filePath, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE)
-    try {
-      await fs.write(outputFile.fd, bmp.buffer);
-    } catch (e) {
-      return null
-    }
-
-    return await this.pickImage(outputFile, quality);
-  }
-
-  // 压缩图片
-  async pickImage(outputFile: fs.File, quality: number) {
-    let imageBuffer: ArrayBuffer | null = null;
-    const imagePacker: image.ImagePacker = image.createImagePacker();
-    const imageSource: image.ImageSource = image.createImageSource(outputFile.fd);
-    imageBuffer = await imagePacker.packing(imageSource, { format: "image/jpeg", quality });
-    await fs.close(outputFile);
-    return imageBuffer;
   }
 }
 
