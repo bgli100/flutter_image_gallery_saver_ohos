@@ -17,6 +17,7 @@ import MethodChannel, { MethodCallHandler, MethodResult } from '@ohos/flutter_oh
 import MethodCall from '@ohos/flutter_ohos/src/main/ets/plugin/common/MethodCall';
 import { Permissions } from '@ohos.abilityAccessCtrl';
 import photoAccessHelper from '@ohos.file.photoAccessHelper'
+import { fileUri, picker } from '@kit.CoreFileKit';
 import { AbilityAware, AbilityPluginBinding } from '@ohos/flutter_ohos';
 import Log from '@ohos/flutter_ohos/src/main/ets/util/Log'
 import { reqPermissionsFromUser, checkAccessToken } from './../../utils/Permissions'
@@ -33,6 +34,7 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
   private channel: MethodChannel | null = null;
   private applicationContext: Context | null = null;
   private photoAccessHelper: photoAccessHelper.PhotoAccessHelper | null = null;
+  private documentViewPicker: picker.DocumentViewPicker | null = null;
   private fileMimeType: FileMimeTypeUtil = new FileMimeTypeUtil();
   private binding: AbilityPluginBinding | null = null;
 
@@ -40,6 +42,7 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
 
   onAttachedToAbility(binding: AbilityPluginBinding): void {
     this.photoAccessHelper = photoAccessHelper.getPhotoAccessHelper(binding.getAbility().context);
+    this.documentViewPicker = picker.DocumentViewPicker(binding.getAbility().context);
 
     this.binding = binding;
   }
@@ -89,6 +92,11 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
         let image: Uint8Array = call.args.get("imageBytes");
         let name: string = call.args.get("name");
         return await this.saveImageToGallery(image, name);
+      case "saveImageToDownload":
+        let image: Uint8Array = call.args.get("imageBytes");
+        let folder: string = call.args.get("folder");
+        let name: string = call.args.get("name");
+        return await this.saveImageToDownload(image, folder, name);
       case "saveFileToGallery":
         let path: string = call.args.get("file");
         let fileName: string = call.args.get("name");
@@ -130,6 +138,41 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
     }
 
     return SaveResultModel.toHashMap(false, null, 'saveImageToGallery fail');
+  }
+
+  // 保存图片到下载
+  async saveImageToDownload(bmp: Uint8Array, folder: string, name: string):Promise<HashMap<String, ESObject>> {
+    if (bmp == null) {
+      return SaveResultModel.toHashMap(false, null, 'parameters error');
+    }
+
+    if (this.applicationContext == null) {
+      return SaveResultModel.toHashMap(false, null, 'applicationContext is null');
+    }
+
+    let fileUri: string | null = await this.generateDownloadUri();
+    let outputFile: fs.File;
+    let success: boolean = false;
+
+    if (fileUri != null) {
+      fs.mkdirSync(fileUri + folder, true);
+      outputFile = fs.openSync(fileUri + folder + name, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
+      try {
+        await fs.write(outputFile.fd, bmp.buffer);
+        success = true;
+      } catch (e) {
+        return SaveResultModel.toHashMap(false, null, 'write is e ' + JSON.stringify(e));
+      }
+      await fs.close(outputFile);
+    } else {
+      return SaveResultModel.toHashMap(false, null, 'fileUri is null');
+    }
+
+    if (success) {
+      return SaveResultModel.toHashMap(true, fileUri, 'success save image');
+    }
+
+    return SaveResultModel.toHashMap(false, null, 'saveImageToDownload fail');
   }
 
   // 保存文件
@@ -187,6 +230,18 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
     }
 
     return uri;
+  }
+
+  // 创建下载文件，返回uri
+  async generateDownloadUri() {
+    let uri: Array<string> | null = null;
+
+    const documentSaveOptions = new picker.DocumentSaveOptions();
+    documentSaveOptions.pickerMode = picker.DocumentPickerMode.DOWNLOAD;
+  
+    uri = await this.documentViewPicker.save(documentSaveOptions);
+
+    return uri[0];
   }
 
   // 获取类型
