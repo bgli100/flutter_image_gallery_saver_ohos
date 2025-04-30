@@ -157,8 +157,9 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
     let success: boolean = false;
 
     if (fileUri != null) {
-      fs.mkdirSync(fileUri + '/' + folder, true);
-      outputFile = fs.openSync(fileUri + '/' + folder + name, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
+      if (!fs.accessSync(fileUri + '/' + folder))
+        fs.mkdirSync(fileUri + '/' + folder, true);
+      outputFile = fs.openSync(fileUri + '/' + folder + name, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
       try {
         await fs.write(outputFile.fd, bmp.buffer);
         success = true;
