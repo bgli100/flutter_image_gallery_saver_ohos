@@ -42,7 +42,7 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
 
   onAttachedToAbility(binding: AbilityPluginBinding): void {
     this.photoAccessHelper = photoAccessHelper.getPhotoAccessHelper(binding.getAbility().context);
-    this.documentViewPicker = picker.DocumentViewPicker(binding.getAbility().context);
+    this.documentViewPicker = new picker.DocumentViewPicker(binding.getAbility().context);
 
     this.binding = binding;
   }
@@ -87,22 +87,24 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
   }
 
   async checkMode(call: MethodCall) {
+    let name: string;
+    let image: Uint8Array;
     switch (call.method) {
       case "saveImageToGallery":
-        let image: Uint8Array = call.args.get("imageBytes");
-        let name: string = call.args.get("name");
+        image = call.args.get("imageBytes");
+        name = call.args.get("name");
         return await this.saveImageToGallery(image, name);
       case "saveImageToDownload":
-        let image: Uint8Array = call.args.get("imageBytes");
+        image = call.args.get("imageBytes");
         let folder: string = call.args.get("folder");
-        let name: string = call.args.get("name");
+        name = call.args.get("name");
         return await this.saveImageToDownload(image, folder, name);
       case "saveFileToGallery":
         let path: string = call.args.get("file");
         let fileName: string = call.args.get("name");
         return await this.saveFileToGallery(path, fileName);
       default:
-        return SaveResultModel.toHashMap(false, null, 'Method is false')
+        return SaveResultModel.toHashMap(false, null, 'Unknown Method: ' + call.method);
     }
   }
 
@@ -155,8 +157,8 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
     let success: boolean = false;
 
     if (fileUri != null) {
-      fs.mkdirSync(fileUri + folder, true);
-      outputFile = fs.openSync(fileUri + folder + name, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
+      fs.mkdirSync(fileUri + '/' + folder, true);
+      outputFile = fs.openSync(fileUri + '/' + folder + name, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
       try {
         await fs.write(outputFile.fd, bmp.buffer);
         success = true;
@@ -236,12 +238,15 @@ export default class ImageGallerySaverPlugin implements FlutterPlugin, MethodCal
   async generateDownloadUri() {
     let uri: Array<string> | null = null;
 
+    if (!this.documentViewPicker)
+      return '';
+
     const documentSaveOptions = new picker.DocumentSaveOptions();
     documentSaveOptions.pickerMode = picker.DocumentPickerMode.DOWNLOAD;
   
     uri = await this.documentViewPicker.save(documentSaveOptions);
 
-    return uri[0];
+    return new fileUri.FileUri(uri[0]).path;
   }
 
   // 获取类型
